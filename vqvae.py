@@ -230,5 +230,5 @@ if __name__ == "__main__":
         if (i+1) % 100 ==0:
             print('{:d} iterations, recon_error : {:.3f}, perplexity: {:.3f}\r\n'.format(i+1, np.mean(train_res_recon_error[-100:]), np.mean(train_res_perplexity[-100:])))
 
-PATH='saved_models/vqvae_params.pkl'
-torch.save(model.state_dict(), PATH)
+    PATH='saved_models/vqvae_params.pkl'
+    torch.save(model.state_dict(), PATH)
