@@ -41,7 +41,7 @@ learning_rate = 1e-3
 
 class Residual(nn.Module):
  
-    def __init__(self,in_channels,num_hiddens,num_residual_hiddens):
+    def __init__(self,in_channels, num_hiddens, num_residual_hiddens):
         super().__init__()
 
         self._block = nn.Sequential(nn.ReLU(True),
@@ -143,6 +143,7 @@ class VectorQuantizer(nn.Module):
      
         # flatten input to 2D (B * H * W , C)
         flat_input = inputs.view(-1, self._embedding_dim)
+        print(flat_input.size())
      
         # calculate distances (euclidean)
         distances = (torch.sum(flat_input**2, dim=1, keepdim=True)

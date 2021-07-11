@@ -12,7 +12,7 @@ import torchvision.transforms as transforms
 from torchvision.utils import make_grid
 from vqvae import Model
 
-batch_size = 256
+batch_size = 1
 num_training_updates = 15000
 num_hiddens = 128
 num_residual_hiddens = 32
@@ -49,6 +49,7 @@ if __name__ == "__main__":
     (valid_originals, _) = next(iter(validation_loader))
     valid_originals = valid_originals.to(device)
     vq_output_eval = model._pre_vq_conv(model._encoder(valid_originals))
+    # print(vq_output_eval)
     _, valid_quantize, _, _ = model._vq_vae(vq_output_eval)
     valid_reconstructions = model._decoder(valid_quantize)
     show(make_grid(valid_originals.cpu()[:16,:,:,:]+0.5))
