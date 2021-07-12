@@ -10,34 +10,13 @@ import torch.optim as optim
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
 from torchvision.utils import make_grid
+from torch.utils.data import Dataset
+import os
+from PIL import Image
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-
-training_data = datasets.CIFAR10(
-        root='data', train=True, download=True,
-        transform=transforms.Compose(
-        [transforms.ToTensor(),transforms.Normalize((0.5,0.5,0.5), 
-        (1.0,1.0,1.0))]))
-validation_data = datasets.CIFAR10(
-        root='data', train=False, download=True,
-        transform=transforms.Compose(
-        [transforms.ToTensor(),transforms.Normalize((0.5,0.5,0.5), 
-        (1.0,1.0,1.0))]))
-  
-data_variance = np.var(training_data.data / 255.0)
-
-batch_size = 256
-num_training_updates = 15000
-num_hiddens = 128
-num_residual_hiddens = 32
-num_residual_layers = 2
-embedding_dim = 64
-num_embeddings = 512
-commitment_cost = 0.25
-decay = 0.99
-learning_rate = 1e-3
 
 class Residual(nn.Module):
  
@@ -143,7 +122,7 @@ class VectorQuantizer(nn.Module):
      
         # flatten input to 2D (B * H * W , C)
         flat_input = inputs.view(-1, self._embedding_dim)
-        print(flat_input.size())
+        # print(flat_input.size())
      
         # calculate distances (euclidean)
         distances = (torch.sum(flat_input**2, dim=1, keepdim=True)
@@ -182,7 +161,7 @@ class Model(nn.Module):
 
         super().__init__()
 
-        self._encoder = Encoder(3, num_hiddens, num_residual_layers, 
+        self._encoder = Encoder(1, num_hiddens, num_residual_layers, 
         num_residual_hiddens)
 
         self._pre_vq_conv = nn.Conv2d(in_channels=num_hiddens,
@@ -191,7 +170,7 @@ class Model(nn.Module):
         self._vq_vae = VectorQuantizer(num_embeddings, embedding_dim, 
         commitment_cost)
 
-        self._decoder = Decoder(embedding_dim, 3, num_hiddens, 
+        self._decoder = Decoder(embedding_dim, 1, num_hiddens, 
         num_residual_layers, num_residual_hiddens)
  
     def forward(self, x):
@@ -203,7 +182,70 @@ class Model(nn.Module):
         return loss, x_recon, perplexity
 
 
+class CustomDataset(Dataset):
+    # im_name_list, resize_dim,
+    def __init__(self, root_dir, transform=None):
+        self.root_dir = root_dir
+        self.im_list = os.listdir(self.root_dir)
+        # self.resize_dim = resize_dim
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.im_list)
+
+    def __getitem__(self, idx):
+        im = Image.open(os.path.join(self.root_dir, self.im_list[idx]))
+        im = im.resize((1000, 1000))
+        # im = np.array(im)
+        # im = Image(im, self.resize_dim, interp='nearest')
+        # im = im / 255.0
+
+        if self.transform:
+            im = self.transform(im)
+
+        return im
+    def _get_all_data(self):
+        tmp = []
+        for im in self.im_list:
+            im = Image.open(os.path.join(self.root_dir, im))
+            im = im.resize((1000, 1000))
+            im = np.array(im)
+            tmp.append(im)
+        data_variance = np.var(np.array(tmp) / 255.0)
+        return data_variance
+        
 if __name__ == "__main__":
+
+
+    training_data = CustomDataset("image_data/train", transform=transforms.Compose(
+            [transforms.ToTensor()]))
+            
+    validation_data = CustomDataset("image_data/train", transform=transforms.Compose(
+            [transforms.ToTensor()]))
+
+    data_variance = training_data._get_all_data()
+    # training_data = datasets.CIFAR10(
+    #         root='data', train=True, download=True,
+    #         transform=transforms.Compose(
+    #         [transforms.ToTensor()]))
+    # validation_data = datasets.CIFAR10(
+    #         root='data', train=False, download=True,
+    #         transform=transforms.Compose(
+    #         [transforms.ToTensor()]))
+
+    # print(training_data.data.shape)
+    # data_variance = np.var(training_data.data / 255.0)
+
+    batch_size = 8
+    num_training_updates = 15000
+    num_hiddens = 156
+    num_residual_hiddens = 32
+    num_residual_layers = 2
+    embedding_dim = 64
+    num_embeddings = 512
+    commitment_cost = 0.25
+    decay = 0.99
+    learning_rate = 1e-3
 
     model = Model(num_hiddens, num_residual_layers, num_residual_hiddens, num_embeddings, embedding_dim, commitment_cost, decay).to(device)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, amsgrad=False)
@@ -214,7 +256,7 @@ if __name__ == "__main__":
     train_res_perplexity = []
     
     for i in range(num_training_updates):
-        (data, _) = next(iter(training_loader))
+        data = next(iter(training_loader))
         data = data.to(device)
         optimizer.zero_grad()
 

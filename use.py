@@ -10,11 +10,11 @@ import torch.optim as optim
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
 from torchvision.utils import make_grid
-from vqvae import Model
+from vqvae import Model, CustomDataset
 
 batch_size = 1
 num_training_updates = 15000
-num_hiddens = 128
+num_hiddens = 256
 num_residual_hiddens = 32
 num_residual_layers = 2
 embedding_dim = 64
@@ -39,21 +39,25 @@ if __name__ == "__main__":
     
     PATH='saved_models/vqvae_params.pkl'
     model.load_state_dict(torch.load(PATH))
-    validation_data = datasets.CIFAR10(
-            root='data', train=False, download=True,
-            transform=transforms.Compose(
-            [transforms.ToTensor(),transforms.Normalize((0.5,0.5,0.5), 
-            (1.0,1.0,1.0))]))
-    validation_loader = DataLoader(validation_data, batch_size = batch_size, shuffle = True, pin_memory = True)
+    validation_data = CustomDataset("image_data/test", transform=transforms.Compose(
+            [transforms.ToTensor()]))
+    validation_loader = DataLoader(validation_data, batch_size = batch_size, shuffle = False, pin_memory = False)
     
-    (valid_originals, _) = next(iter(validation_loader))
-    valid_originals = valid_originals.to(device)
-    vq_output_eval = model._pre_vq_conv(model._encoder(valid_originals))
+    # for i, data in enumerate(validation_loader):
+    data = validation_data[100]
+    data = data.unsqueeze(1)
+    data = data.to(device)
+    vq_output_eval = model._pre_vq_conv(model._encoder(data))
     # print(vq_output_eval)
     _, valid_quantize, _, _ = model._vq_vae(vq_output_eval)
     valid_reconstructions = model._decoder(valid_quantize)
-    show(make_grid(valid_originals.cpu()[:16,:,:,:]+0.5))
-    plt.show()
+    # print(valid_reconstructions[0].size())
+    # a = valid_reconstructions[0].cpu()
+    a1 = data#data# valid_reconstructions
+    image = a1.cpu().clone()
+    image = image.squeeze(0)
+    img = transforms.ToPILImage()(image)
+    img.show()
+    # show(make_grid(valid_originals.cpu()[:16,:,:,:]+0.5))
+    # plt.show()
     
-# PATH='saved_models/vqvae_params.pkl'
-# torch.save(model.state_dict(), PATH)
