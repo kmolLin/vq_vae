@@ -38,7 +38,7 @@ if __name__ == "__main__":
 
     model = Model(num_hiddens, num_residual_layers, num_residual_hiddens, num_embeddings, embedding_dim, commitment_cost, decay).to(device)
     
-    PATH = 'saved_models/epoch201_0.99.pkl'
+    PATH = 'saved_models/epoch12_1.97.pkl'
     model.load_state_dict(torch.load(PATH))
     validation_data = CustomDataset("image_d/train", transform=transforms.Compose(
             [transforms.ToTensor()]))

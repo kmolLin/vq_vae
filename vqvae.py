@@ -70,10 +70,10 @@ class Encoder(nn.Module):
     
   def forward(self, inputs):
     x = self._conv_1(inputs)
-    x = F.relu(x)
+    x = F.leaky_relu(x)
     
     x = self._conv_2(x)
-    x = F.relu(x)
+    x = F.leaky_relu(x)
     
     x = self._conv_3(x)
     return self._residual_stack(x)
@@ -218,13 +218,6 @@ class CustomDataset(Dataset):
         return data_variance
 
 
-def stepfun(epoch):
-    if epoch < 10:
-        return 0.01
-    else:
-        return 0.001
-
-
 if __name__ == "__main__":
 
     training_data = CustomDataset("image_d/train", transform=transforms.Compose(
@@ -246,6 +239,7 @@ if __name__ == "__main__":
     # print(training_data.data.shape)
     # data_variance = np.var(training_data.data / 255.0)
 
+    torch.cuda.manual_seed(123456)
     batch_size = 32
     num_training_updates = 15000
     epoch = 15000
@@ -292,9 +286,9 @@ if __name__ == "__main__":
                         continue
                     elif val_score < 0.01:
                         torch.save(model.state_dict(), f"saved_models/epoch{i}_{val_score:.2f}.pkl")
-                    elif i > 200:
-                        torch.save(model.state_dict(), f"saved_models/epoch{i}_{val_score:.2f}.pkl")
-                        exit()
+                    # elif i > 200:
+                    #     torch.save(model.state_dict(), f"saved_models/epoch{i}_{val_score:.2f}.pkl")
+                    #     exit()
         # scheduler.step()
 
     PATH = 'saved_models/vqvae_params.pkl'
