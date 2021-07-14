@@ -65,7 +65,7 @@ class Encoder(nn.Module):
                              out_channels=num_hiddens,
                              kernel_size=3, stride=1, padding=1)
     self._residual_stack = ResidualStack(in_channels=num_hiddens,
-    num_hiddens=num_hiddens, num_residual_layers=num_residual_layers,
+    num_hiddens=num_hiddens,num_residual_layers=num_residual_layers,
     num_residual_hiddens=num_residual_hiddens)
     
   def forward(self, inputs):
@@ -161,7 +161,7 @@ class Model(nn.Module):
 
         super().__init__()
 
-        self._encoder = Encoder(3, num_hiddens, num_residual_layers,
+        self._encoder = Encoder(1, num_hiddens, num_residual_layers, 
         num_residual_hiddens)
 
         self._pre_vq_conv = nn.Conv2d(in_channels=num_hiddens,
@@ -170,7 +170,7 @@ class Model(nn.Module):
         self._vq_vae = VectorQuantizer(num_embeddings, embedding_dim, 
         commitment_cost)
 
-        self._decoder = Decoder(embedding_dim, 3, num_hiddens,
+        self._decoder = Decoder(embedding_dim, 1, num_hiddens, 
         num_residual_layers, num_residual_hiddens)
  
     def forward(self, x):
@@ -195,9 +195,7 @@ class CustomDataset(Dataset):
 
     def __getitem__(self, idx):
         im = Image.open(os.path.join(self.root_dir, self.im_list[idx]))
-        # im = im.crop((600, 0, 1700, 1400))
-        im = im.resize((512, 512))
-        # im.show()
+        im = im.resize((1000, 1000))
         # im = np.array(im)
         # im = Image(im, self.resize_dim, interp='nearest')
         # im = im / 255.0
@@ -206,32 +204,24 @@ class CustomDataset(Dataset):
             im = self.transform(im)
 
         return im
-
     def _get_all_data(self):
         tmp = []
         for im in self.im_list:
             im = Image.open(os.path.join(self.root_dir, im))
-            im = im.resize((512, 512))
+            im = im.resize((1000, 1000))
             im = np.array(im)
             tmp.append(im)
         data_variance = np.var(np.array(tmp) / 255.0)
         return data_variance
-
-
-def stepfun(epoch):
-    if epoch < 10:
-        return 0.01
-    else:
-        return 0.001
-
-
+        
 if __name__ == "__main__":
 
-    training_data = CustomDataset("image_d/train", transform=transforms.Compose(
+
+    training_data = CustomDataset("image_data/train", transform=transforms.Compose(
             [transforms.ToTensor()]))
             
-    # validation_data = CustomDataset("image_data/train", transform=transforms.Compose(
-    #         [transforms.ToTensor()]))
+    validation_data = CustomDataset("image_data/train", transform=transforms.Compose(
+            [transforms.ToTensor()]))
 
     data_variance = training_data._get_all_data()
     # training_data = datasets.CIFAR10(
@@ -246,56 +236,42 @@ if __name__ == "__main__":
     # print(training_data.data.shape)
     # data_variance = np.var(training_data.data / 255.0)
 
-    batch_size = 32
+    batch_size = 10
     num_training_updates = 15000
-    epoch = 15000
-    num_hiddens = 64
+    num_hiddens = 156
     num_residual_hiddens = 32
     num_residual_layers = 2
     embedding_dim = 64
     num_embeddings = 512
     commitment_cost = 0.25
     decay = 0.99
-    learning_rate = 0.02
+    learning_rate = 1e-3
 
-    model = Model(num_hiddens, num_residual_layers, num_residual_hiddens, num_embeddings, embedding_dim, commitment_cost).to(device)
+    model = Model(num_hiddens, num_residual_layers, num_residual_hiddens, num_embeddings, embedding_dim, commitment_cost, decay).to(device)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, amsgrad=False)
 
-    training_loader = DataLoader(training_data, batch_size=batch_size, shuffle = True, pin_memory = True)
-    # validation_loader = DataLoader(validation_data, batch_size = batch_size, shuffle = True, pin_memory = True)
+    training_loader = DataLoader(training_data, batch_size = batch_size, shuffle = True, pin_memory = True)
+    validation_loader = DataLoader(validation_data, batch_size = batch_size, shuffle = True, pin_memory = True)
     train_res_recon_error = []
     train_res_perplexity = []
-    val_score = 1000
+    
+    for i in range(num_training_updates):
+        data = next(iter(training_loader))
+        data = data.to(device)
+        optimizer.zero_grad()
 
-    # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.1)
-    for i in range(1000):
-        for batch_idx, data in enumerate(training_loader):
-            # data = next(iter(training_loader))
-            data = data.to(device)
-            optimizer.zero_grad()
+        vq_loss, data_recon, perplexity = model(data)
+        recon_error = F.mse_loss(data_recon, data) / data_variance
+        loss = recon_error + vq_loss
+        loss.backward()
 
-            vq_loss, data_recon, perplexity = model(data)
-            recon_error = F.mse_loss(data_recon, data) / data_variance
-            loss = recon_error + vq_loss
-            loss.backward()
+        optimizer.step()
 
-            optimizer.step()
+        train_res_recon_error.append(recon_error.item())
+        train_res_perplexity.append(perplexity.item())
+  
+        if (i+1) % 100 ==0:
+            print('{:d} iterations, recon_error : {:.3f}, perplexity: {:.3f}\r\n'.format(i+1, np.mean(train_res_recon_error[-100:]), np.mean(train_res_perplexity[-100:])))
 
-            train_res_recon_error.append(recon_error.item())
-            train_res_perplexity.append(perplexity.item())
-
-            if batch_idx % 100 == 0:
-                print('{:d} epoch, recon_error : {:.3f}, perplexity: {:.3f}\r\n'.format(i+1, np.mean(train_res_recon_error[-100:]), np.mean(train_res_perplexity[-100:])))
-                if val_score > np.mean(train_res_recon_error[-100:]):
-                    val_score = np.mean(train_res_recon_error[-100:])
-                    if i == 0:
-                        continue
-                    elif val_score < 0.01:
-                        torch.save(model.state_dict(), f"saved_models/epoch{i}_{val_score:.2f}.pkl")
-                    elif i > 200:
-                        torch.save(model.state_dict(), f"saved_models/epoch{i}_{val_score:.2f}.pkl")
-                        exit()
-        # scheduler.step()
-
-    PATH = 'saved_models/vqvae_params.pkl'
+    PATH='saved_models/vqvae_params.pkl'
     torch.save(model.state_dict(), PATH)
