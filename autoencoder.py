@@ -10,10 +10,21 @@ from torchvision import datasets, transforms
 import matplotlib.pyplot as plt
 import torch.nn as nn
 import torch.nn.functional as F
+import cv2
 
 from vqvae import CustomDataset
-from pytorch_grad_cam import GradCAM
+from pytorch_grad_cam import GradCAM, ScoreCAM
 from pytorch_grad_cam.utils.image import show_cam_on_image
+
+
+def grab_cam_vis(image, model):
+    """
+
+    :param image: tensor of image shape (3, 512, 512)
+    :param model: autoencoder model
+    :return:
+    """
+
 
 
 class ConvAutoencoder(nn.Module):
@@ -90,14 +101,14 @@ if __name__ == "__main__":
 
     model.load_state_dict(torch.load("saved_models/autoencoder.pkl"))
 
-
+    num_image = 1
     model.to(device)
     model.eval()
-    image = val[0]
+    image = val[num_image]
     image = image.to(device)
     image = image.unsqueeze(0)
 
-    cam = GradCAM(model=model, target_layer=model.decoder[-2], use_cuda=True)
+    cam = GradCAM(model=model, target_layer=model.decoder[-1], use_cuda=True)
 
 
     def segmentation_get_loss(output, target_category):
@@ -110,21 +121,19 @@ if __name__ == "__main__":
     target_category = 281
 
     # You can also pass aug_smooth=True and eigen_smooth=True, to apply smoothing.
-    grayscale_cam = cam(input_tensor=image, target_category=1)
+    grayscale_cam = cam(input_tensor=image, target_category=1, aug_smooth=True)
 
     grayscale_cam = grayscale_cam[0, :]
 
-    a = val[0].numpy()
+    a = val[num_image].permute(1, 2, 0).numpy()
 
-    print(a.shape)
-    np.roll(a,)
-    print(a.shape)
-    exit()
+    visualization = show_cam_on_image(a, grayscale_cam)
 
-    visualization = show_cam_on_image(val[0].numpy(), grayscale_cam)
+    plt.imshow(visualization)
+    plt.show()
 
     outputs = model(image)
     image = outputs.cpu().clone()
     image = image.squeeze(0)
     new_img_PIL = transforms.ToPILImage()(image)
-    # new_img_PIL.show()
+    new_img_PIL.show()
