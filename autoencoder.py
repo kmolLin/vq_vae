@@ -24,6 +24,34 @@ def grab_cam_vis(image, model):
     :param model: autoencoder model
     :return:
     """
+    model.to(device)
+    model.eval()
+
+    image = image.to(device)
+    image = image.unsqueeze(0)
+
+    cam = GradCAM(model=model, target_layer=model.decoder[-1], use_cuda=True)
+
+    def segmentation_get_loss(output, target_category):
+        loss = 0
+        for i in range(len(target_category)):
+            loss = loss + output[i, target_category, :, :].mean()
+        return loss
+
+    cam.get_loss = segmentation_get_loss
+    target_category = 281
+
+    # You can also pass aug_smooth=True and eigen_smooth=True, to apply smoothing.
+    grayscale_cam = cam(input_tensor=image, target_category=1, aug_smooth=True)
+
+    grayscale_cam = grayscale_cam[0, :]
+
+    a = val[num_image].permute(1, 2, 0).numpy()
+
+    visualization = show_cam_on_image(a, grayscale_cam)
+
+    plt.imshow(visualization)
+    plt.show()
 
 
 
@@ -101,36 +129,12 @@ if __name__ == "__main__":
 
     model.load_state_dict(torch.load("saved_models/autoencoder.pkl"))
 
+
     num_image = 1
-    model.to(device)
-    model.eval()
     image = val[num_image]
-    image = image.to(device)
-    image = image.unsqueeze(0)
+    grab_cam_vis(image, model)
 
-    cam = GradCAM(model=model, target_layer=model.decoder[-1], use_cuda=True)
-
-
-    def segmentation_get_loss(output, target_category):
-        loss = 0
-        for i in range(len(target_category)):
-            loss = loss + output[i, target_category, :, :].mean()
-        return loss
-
-    cam.get_loss = segmentation_get_loss
-    target_category = 281
-
-    # You can also pass aug_smooth=True and eigen_smooth=True, to apply smoothing.
-    grayscale_cam = cam(input_tensor=image, target_category=1, aug_smooth=True)
-
-    grayscale_cam = grayscale_cam[0, :]
-
-    a = val[num_image].permute(1, 2, 0).numpy()
-
-    visualization = show_cam_on_image(a, grayscale_cam)
-
-    plt.imshow(visualization)
-    plt.show()
+    exit()
 
     outputs = model(image)
     image = outputs.cpu().clone()
