@@ -134,7 +134,8 @@ if __name__ == "__main__":
     image = val[num_image]
     grab_cam_vis(image, model)
 
-    exit()
+    image = image.to(device)
+    image = image.unsqueeze(0)
 
     outputs = model(image)
     image = outputs.cpu().clone()
