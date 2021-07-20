@@ -15,6 +15,7 @@ import cv2
 from vqvae import CustomDataset
 from pytorch_grad_cam import GradCAM, ScoreCAM
 from pytorch_grad_cam.utils.image import show_cam_on_image
+from torchsummary import summary
 
 
 def grab_cam_vis(image, model):
@@ -101,9 +102,10 @@ if __name__ == "__main__":
     training_loader = DataLoader(training_data, batch_size=batch_size, shuffle=True, pin_memory=True)
     model = ConvAutoencoder()
     model.to(device)
+    summary(model, (3, 1024, 1280))
+    
     criterion = nn.BCELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.005)
-    print(model)
 
     n_epochs = 500
     # model.train()
@@ -130,7 +132,7 @@ if __name__ == "__main__":
     model.load_state_dict(torch.load("saved_models/autoencoder.pkl"))
 
 
-    num_image = 1
+    num_image = 3
     image = val[num_image]
     grab_cam_vis(image, model)
 
