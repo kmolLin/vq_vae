@@ -14,7 +14,7 @@ from vqvae import Model, CustomDataset
 
 batch_size = 1
 num_training_updates = 15000
-num_hiddens = 64
+num_hiddens = 128
 num_residual_hiddens = 32
 num_residual_layers = 2
 embedding_dim = 64
@@ -35,13 +35,16 @@ def show(img):
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 if __name__ == "__main__":
-
+    mean = [0.5, 0.5, 0.5]
+    std = [1.0, 1.0, 1.0]
     model = Model(num_hiddens, num_residual_layers, num_residual_hiddens, num_embeddings, embedding_dim, commitment_cost, decay).to(device)
     
-    PATH = 'saved_models/epoch12_1.97.pkl'
+    PATH = 'saved_models/vqvae_params.pkl'
     model.load_state_dict(torch.load(PATH))
-    validation_data = CustomDataset("image_d/train", transform=transforms.Compose(
-            [transforms.ToTensor()]))
+    validation_data = CustomDataset("imagess", transform=transforms.Compose(
+            [transforms.ToTensor(),
+             transforms.Normalize(mean, std),]))
+
     validation_loader = DataLoader(validation_data, batch_size = batch_size, shuffle = False, pin_memory = False)
     
     # for i, data in enumerate(validation_loader):

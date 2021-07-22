@@ -196,7 +196,7 @@ class CustomDataset(Dataset):
     def __getitem__(self, idx):
         im = Image.open(os.path.join(self.root_dir, self.im_list[idx]))
         # im = im.crop((600, 0, 1700, 1400))
-        im = im.resize((512, 512))
+        # im = im.resize((512, 512))
         # im.show()
         # im = np.array(im)
         # im = Image(im, self.resize_dim, interp='nearest')
@@ -211,7 +211,7 @@ class CustomDataset(Dataset):
         tmp = []
         for im in self.im_list:
             im = Image.open(os.path.join(self.root_dir, im))
-            im = im.resize((512, 512))
+            # im = im.resize((512, 512))
             im = np.array(im)
             tmp.append(im)
         data_variance = np.var(np.array(tmp) / 255.0)
@@ -220,9 +220,19 @@ class CustomDataset(Dataset):
 
 if __name__ == "__main__":
 
-    training_data = CustomDataset("image_d/train", transform=transforms.Compose(
-            [transforms.ToTensor()]))
-            
+    brightness_change = transforms.ColorJitter()
+    rotate = transforms.RandomRotation(30)
+
+    transform_set = [rotate, brightness_change]
+    mean = [0.5, 0.5, 0.5]
+    std = [1.0, 1.0, 1.0]
+
+    training_data = CustomDataset("imagess", transform=transforms.Compose(
+            [transforms.ToTensor(),
+             transforms.Normalize(mean, std),
+             # transforms.RandomApply(transform_set, p=0.5)
+             ]))
+
     # validation_data = CustomDataset("image_data/train", transform=transforms.Compose(
     #         [transforms.ToTensor()]))
 
@@ -240,10 +250,10 @@ if __name__ == "__main__":
     # data_variance = np.var(training_data.data / 255.0)
 
     torch.cuda.manual_seed(123456)
-    batch_size = 32
+    batch_size = 12
     num_training_updates = 15000
     epoch = 15000
-    num_hiddens = 64
+    num_hiddens = 128
     num_residual_hiddens = 32
     num_residual_layers = 2
     embedding_dim = 64
@@ -262,7 +272,7 @@ if __name__ == "__main__":
     val_score = 1000
 
     # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.1)
-    for i in range(1000):
+    for i in range(100):
         for batch_idx, data in enumerate(training_loader):
             # data = next(iter(training_loader))
             data = data.to(device)
