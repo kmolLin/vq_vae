@@ -1,7 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.signal import savgol_filter
-
+from torch.utils.data import Dataset
+import os
 
 from six.moves import xrange
 
@@ -15,25 +16,68 @@ import torch.optim as optim
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
 from torchvision.utils import make_grid
+from torchsummary import summary
+from PIL import Image
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+
+class CustomDataset(Dataset):
+    # im_name_list, resize_dim,
+    def __init__(self, root_dir, transform=None):
+        self.root_dir = root_dir
+        self.im_list = os.listdir(self.root_dir)
+        # self.resize_dim = resize_dim
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.im_list)
+
+    def __getitem__(self, idx):
+        im = Image.open(os.path.join(self.root_dir, self.im_list[idx]))
+        im = im.resize((256, 256))
+        # im = np.array(im)
+        # im = Image(im, self.resize_dim, interp='nearest')
+        # im = im / 255.0
+
+        if self.transform:
+            im = self.transform(im)
+
+        return im
+    def _get_all_data(self):
+        tmp = []
+        for im in self.im_list:
+            im = Image.open(os.path.join(self.root_dir, im))
+            im = im.resize((256, 256))
+            im = np.array(im)
+            tmp.append(im)
+        data_variance = np.var(np.array(tmp) / 255.0)
+        return data_variance
+
+
 ## Load Data
 
-training_data = datasets.CIFAR10(root="data", train=True, download=True,
-                                  transform=transforms.Compose([
-                                      transforms.ToTensor(),
-                                      transforms.Normalize((0.5,0.5,0.5), (1.0,1.0,1.0))
-                                  ]))
+# training_data = datasets.CIFAR10(root="data", train=True, download=True,
+#                                   transform=transforms.Compose([
+#                                       transforms.ToTensor(),
+#                                       transforms.Normalize((0.5,0.5,0.5), (1.0,1.0,1.0))
+#                                   ]))
+#
+# validation_data = datasets.CIFAR10(root="data", train=False, download=True,
+#                                   transform=transforms.Compose([
+#                                       transforms.ToTensor(),
+#                                       transforms.Normalize((0.5,0.5,0.5), (1.0,1.0,1.0))
+#                                   ]))
+training_data = CustomDataset("imagess", transform=transforms.Compose(
+    [transforms.ToTensor(),
+     transforms.Normalize((0.5,0.5,0.5), (1.0,1.0,1.0))]))
 
-validation_data = datasets.CIFAR10(root="data", train=False, download=True,
-                                  transform=transforms.Compose([
-                                      transforms.ToTensor(),
-                                      transforms.Normalize((0.5,0.5,0.5), (1.0,1.0,1.0))
-                                  ]))
-                                  
-data_variance = np.var(training_data.data / 255.0)
+validation_data = CustomDataset("val_data", transform=transforms.Compose(
+    [transforms.ToTensor(),
+     transforms.Normalize((0.5,0.5,0.5), (1.0,1.0,1.0))]))
+
+# data_variance = np.var(training_data.data / 255.0)
 
 
 class VectorQuantizer(nn.Module):
@@ -115,7 +159,7 @@ class VectorQuantizerEMA(nn.Module):
         encoding_indices = torch.argmin(distances, dim=1).unsqueeze(1)
         encodings = torch.zeros(encoding_indices.shape[0], self._num_embeddings, device=inputs.device)
         encodings.scatter_(1, encoding_indices, 1)
-        
+
         # Quantize and unflatten
         quantized = torch.matmul(encodings, self._embedding.weight).view(input_shape)
         
@@ -292,7 +336,10 @@ if __name__ == "__main__":
     decay = 0.99
 
     learning_rate = 1e-3
-    training_loader = DataLoader(training_data, 
+
+    data_variance = training_data._get_all_data()
+
+    training_loader = DataLoader(training_data,
                              batch_size=batch_size, 
                              shuffle=True,
                              pin_memory=True)
@@ -305,66 +352,70 @@ if __name__ == "__main__":
               num_embeddings, embedding_dim, 
               commitment_cost, decay).to(device)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, amsgrad=False)
-    """
-    model.train()
-    train_res_recon_error = []
-    train_res_perplexity = []
-    
-    for i in range(num_training_updates):
-        (data, _) = next(iter(training_loader))
-        data = data.to(device)
-        optimizer.zero_grad()
 
-        vq_loss, data_recon, perplexity = model(data)
-        recon_error = F.mse_loss(data_recon, data) / data_variance
-        loss = recon_error + vq_loss
-        loss.backward()
+    # model.train()
+    # train_res_recon_error = []
+    # train_res_perplexity = []
+    #
+    # for i in range(num_training_updates):
+    #     data = next(iter(training_loader))
+    #     data = data.to(device)
+    #     optimizer.zero_grad()
+    #
+    #     vq_loss, data_recon, perplexity = model(data)
+    #     recon_error = F.mse_loss(data_recon, data) / data_variance
+    #     loss = recon_error + vq_loss
+    #     loss.backward()
+    #
+    #     optimizer.step()
+    #
+    #     train_res_recon_error.append(recon_error.item())
+    #     train_res_perplexity.append(perplexity.item())
+    #
+    #     if (i+1) % 100 == 0:
+    #         print('%d iterations' % (i+1))
+    #         print('recon_error: %.3f' % np.mean(train_res_recon_error[-100:]))
+    #         print('perplexity: %.3f' % np.mean(train_res_perplexity[-100:]))
+    #         print()
+    #         if np.mean(train_res_recon_error[-100:]) < 0.01:
+    #             value = np.mean(train_res_recon_error[-100:])
+    #             torch.save(model.state_dict(), f"saved_models/vqvae_{i+1}_{value:.4f}.pkl")
+    # torch.save(model.state_dict(), f"saved_models/t1t1_vqvae.pkl")
+    # train_res_recon_error_smooth = savgol_filter(train_res_recon_error, 201, 7)
+    # train_res_perplexity_smooth = savgol_filter(train_res_perplexity, 201, 7)
+    #
+    # f = plt.figure(figsize=(16,8))
+    # ax = f.add_subplot(1,2,1)
+    # ax.plot(train_res_recon_error_smooth)
+    # ax.set_yscale('log')
+    # ax.set_title('Smoothed NMSE.')
+    # ax.set_xlabel('iteration')
+    #
+    # ax = f.add_subplot(1,2,2)
+    # ax.plot(train_res_perplexity_smooth)
+    # ax.set_title('Smoothed Average codebook usage (perplexity).')
+    # ax.set_xlabel('iteration')
+    # plt.show()
+    #
+    # exit()
 
-        optimizer.step()
-        
-        train_res_recon_error.append(recon_error.item())
-        train_res_perplexity.append(perplexity.item())
-
-        if (i+1) % 100 == 0:
-            print('%d iterations' % (i+1))
-            print('recon_error: %.3f' % np.mean(train_res_recon_error[-100:]))
-            print('perplexity: %.3f' % np.mean(train_res_perplexity[-100:]))
-            print()
-    torch.save(model.state_dict(), f"saved_models/t1t1_vqvae.pkl")
-    train_res_recon_error_smooth = savgol_filter(train_res_recon_error, 201, 7)
-    train_res_perplexity_smooth = savgol_filter(train_res_perplexity, 201, 7)
-    
-    f = plt.figure(figsize=(16,8))
-    ax = f.add_subplot(1,2,1)
-    ax.plot(train_res_recon_error_smooth)
-    ax.set_yscale('log')
-    ax.set_title('Smoothed NMSE.')
-    ax.set_xlabel('iteration')
-
-    ax = f.add_subplot(1,2,2)
-    ax.plot(train_res_perplexity_smooth)
-    ax.set_title('Smoothed Average codebook usage (perplexity).')
-    ax.set_xlabel('iteration')
-    plt.show()
-    """
-    PATH = 'saved_models/t1t1_vqvae.pkl'
+    PATH = 'saved_models/vqvae_14300_0.0071.pkl'
     model.load_state_dict(torch.load(PATH))
+
     model.eval()
 
-    (valid_originals, _) = next(iter(validation_loader))
+    valid_originals = next(iter(validation_loader))
     valid_originals = valid_originals.to(device)
 
     vq_output_eval = model._pre_vq_conv(model._encoder(valid_originals))
-    _, valid_quantize, pr, _ = model._vq_vae(vq_output_eval)
-    print(valid_quantize)
-    # print(pr)
+    _, valid_quantize, pr, enc = model._vq_vae(vq_output_eval)
     valid_reconstructions = model._decoder(valid_quantize)
     
-    (train_originals, _) = next(iter(training_loader))
+    train_originals = next(iter(training_loader))
     train_originals = train_originals.to(device)
     _, train_reconstructions, _, _ = model._vq_vae(train_originals)
 
-    
+
     def show(img):
         npimg = img.numpy()
         fig = plt.imshow(np.transpose(npimg, (1,2,0)), interpolation='nearest')
