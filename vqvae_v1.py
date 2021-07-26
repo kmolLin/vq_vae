@@ -5,7 +5,7 @@ from scipy.signal import savgol_filter
 
 from six.moves import xrange
 
-# import umap
+import umap
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -297,7 +297,7 @@ if __name__ == "__main__":
                              shuffle=True,
                              pin_memory=True)
     validation_loader = DataLoader(validation_data,
-                                   batch_size=32,
+                                   batch_size=1,
                                    shuffle=True,
                                    pin_memory=True)
                                    
@@ -355,7 +355,9 @@ if __name__ == "__main__":
     valid_originals = valid_originals.to(device)
 
     vq_output_eval = model._pre_vq_conv(model._encoder(valid_originals))
-    _, valid_quantize, _, _ = model._vq_vae(vq_output_eval)
+    _, valid_quantize, pr, _ = model._vq_vae(vq_output_eval)
+    print(valid_quantize)
+    # print(pr)
     valid_reconstructions = model._decoder(valid_quantize)
     
     (train_originals, _) = next(iter(training_loader))
@@ -373,3 +375,10 @@ if __name__ == "__main__":
     plt.show()
     show(make_grid(valid_originals.cpu()+0.5))
     plt.show()
+    
+    
+    # proj = umap.UMAP(n_neighbors=3,
+    #          min_dist=0.1,
+    #          metric='cosine').fit_transform(model._vq_vae._embedding.weight.data.cpu())
+    # plt.scatter(proj[:,0], proj[:,1], alpha=0.3)
+    # plt.show()
