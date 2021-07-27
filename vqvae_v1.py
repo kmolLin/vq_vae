@@ -162,7 +162,7 @@ class VectorQuantizerEMA(nn.Module):
 
         # Quantize and unflatten
         quantized = torch.matmul(encodings, self._embedding.weight).view(input_shape)
-        
+
         # Use EMA to update the embedding vectors
         if self.training:
             self._ema_cluster_size = self._ema_cluster_size * self._decay + \
@@ -325,8 +325,8 @@ if __name__ == "__main__":
     num_training_updates = 15000
 
     num_hiddens = 128
-    num_residual_hiddens = 32
-    num_residual_layers = 2
+    num_residual_hiddens = 64
+    num_residual_layers = 4
 
     embedding_dim = 64
     num_embeddings = 512
@@ -340,7 +340,7 @@ if __name__ == "__main__":
     data_variance = training_data._get_all_data()
 
     training_loader = DataLoader(training_data,
-                             batch_size=batch_size, 
+                             batch_size=4,
                              shuffle=True,
                              pin_memory=True)
     validation_loader = DataLoader(validation_data,
@@ -377,9 +377,9 @@ if __name__ == "__main__":
     #         print('recon_error: %.3f' % np.mean(train_res_recon_error[-100:]))
     #         print('perplexity: %.3f' % np.mean(train_res_perplexity[-100:]))
     #         print()
-    #         if np.mean(train_res_recon_error[-100:]) < 0.01:
+    #         if np.mean(train_res_recon_error[-100:]) < 0.009:
     #             value = np.mean(train_res_recon_error[-100:])
-    #             torch.save(model.state_dict(), f"saved_models/vqvae_{i+1}_{value:.4f}.pkl")
+    #             torch.save(model.state_dict(), f"saved_models/high_cnn/vqvae_{i+1}_{value:.4f}.pkl")
     # torch.save(model.state_dict(), f"saved_models/t1t1_vqvae.pkl")
     # train_res_recon_error_smooth = savgol_filter(train_res_recon_error, 201, 7)
     # train_res_perplexity_smooth = savgol_filter(train_res_perplexity, 201, 7)
@@ -399,18 +399,19 @@ if __name__ == "__main__":
     #
     # exit()
 
-    PATH = 'saved_models/vqvae_14300_0.0071.pkl'
+    PATH = 'saved_models/t1t1_vqvae.pkl'
     model.load_state_dict(torch.load(PATH))
 
     model.eval()
 
-    valid_originals = next(iter(validation_loader))
+    valid_originals = next(iter(training_loader))
     valid_originals = valid_originals.to(device)
 
     vq_output_eval = model._pre_vq_conv(model._encoder(valid_originals))
     _, valid_quantize, pr, enc = model._vq_vae(vq_output_eval)
     valid_reconstructions = model._decoder(valid_quantize)
-    
+    avg_probs = torch.mean(enc, dim=0)
+
     train_originals = next(iter(training_loader))
     train_originals = train_originals.to(device)
     _, train_reconstructions, _, _ = model._vq_vae(train_originals)
@@ -426,8 +427,7 @@ if __name__ == "__main__":
     plt.show()
     show(make_grid(valid_originals.cpu()+0.5))
     plt.show()
-    
-    
+
     # proj = umap.UMAP(n_neighbors=3,
     #          min_dist=0.1,
     #          metric='cosine').fit_transform(model._vq_vae._embedding.weight.data.cpu())
